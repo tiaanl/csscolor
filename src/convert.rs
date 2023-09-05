@@ -1,18 +1,118 @@
-use crate::color::{Color, ColorSpace};
+use crate::color::{Color, ColorSpace, Components};
 
 impl Color {
     pub fn to_color_space(&self, color_space: ColorSpace) -> Color {
+        use ColorSpace as C;
+
         if self.color_space == color_space {
             return self.clone();
+        }
+
+        // Handle conversions that can be done directly.
+        match (self.color_space, color_space) {
+            (C::Srgb, C::Hsl) => {
+                let [hue, saturation, lightness] = rgb_to_hsl(&self.components);
+                return Self::new(color_space, hue, saturation, lightness, self.alpha);
+            }
+            (C::Lch, C::Lab) | (C::Oklch, C::Oklab) => {
+                let [lightness, chroma, hue] = polar_to_orthogonal(&self.components);
+                return Self::new(color_space, lightness, chroma, hue, self.alpha);
+            }
+            (C::Lab, C::Lch) | (C::Oklab, C::Oklch) => {
+                let [lightness, a, b] = orthogonal_to_polar(&self.components);
+                return Self::new(color_space, lightness, a, b, self.alpha);
+            }
+
+            _ => {
+                // Not a direct conversion.
+            }
         }
 
         todo!()
     }
 }
 
+/// Calculate the hue from RGB components and return it along with the min and
+/// max RGB values.
+fn rgb_to_hue_min_max(red: f32, green: f32, blue: f32) -> (f32, f32, f32) {
+    let max = red.max(green).max(blue);
+    let min = red.min(green).min(blue);
+
+    let delta = max - min;
+
+    let hue = if delta != 0.0 {
+        60.0 * if max == red {
+            (green - blue) / delta + if green < blue { 6.0 } else { 0.0 }
+        } else if max == green {
+            (blue - red) / delta + 2.0
+        } else {
+            (red - green) / delta + 4.0
+        }
+    } else {
+        f32::NAN
+    };
+
+    (hue, min, max)
+}
+
+/// Convert from RGB notation to HSL notation.
+/// <https://drafts.csswg.org/css-color-4/#rgb-to-hsl>
+fn rgb_to_hsl(from: &Components) -> Components {
+    let [red, green, blue] = *from;
+
+    let (hue, min, max) = rgb_to_hue_min_max(red, green, blue);
+
+    let lightness = (min + max) / 2.0;
+    let delta = max - min;
+
+    let saturation = if delta != 0.0 {
+        if lightness == 0.0 || lightness == 1.0 {
+            0.0
+        } else {
+            (max - lightness) / lightness.min(1.0 - lightness)
+        }
+    } else {
+        0.0
+    };
+
+    [hue, saturation, lightness]
+}
+
+/// Convert from a cylindrical polar coordinate to the rectangular orthogonal
+/// form. This is used to convert (ok)lch to (ok)lab.
+/// <https://drafts.csswg.org/css-color-4/#color-conversion-code>
+pub fn polar_to_orthogonal(from: &Components) -> Components {
+    let [lightness, chroma, hue] = *from;
+
+    let hue = hue.to_radians();
+    let a = chroma * hue.cos();
+    let b = chroma * hue.sin();
+
+    [lightness, a, b]
+}
+
+/// Convert from the rectangular orthogonal form to a cylindrical polar
+/// coordinate. This is used to convert (ok)lab to (ok)lch.
+/// <https://drafts.csswg.org/css-color-4/#color-conversion-code>
+pub fn orthogonal_to_polar(from: &Components) -> Components {
+    let [lightness, a, b] = *from;
+
+    let hue = b.atan2(a).to_degrees().rem_euclid(360.0);
+    let chroma = (a * a + b * b).sqrt();
+
+    [lightness, chroma, hue]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    macro_rules! almost_equal {
+        ($c1:expr, $c2:expr) => {{
+            // Equality within 4 decimal places.
+            ($c2 - $c1).abs() < 1.0e-4
+        }};
+    }
 
     #[test]
     fn no_conversion_happens_if_color_spaces_are_equal() {
@@ -22,5 +122,58 @@ mod tests {
     }
 
     #[test]
-    fn conversion_srgb_to_hsl() {}
+    fn conversions() {
+        #[rustfmt::skip]
+        let conversions = [
+            (ColorSpace::Srgb, 0.8235, 0.4118, 0.1176, 1.0, ColorSpace::Hsl, 25.0064, 0.75, 0.4706, 1.0),
+
+            (ColorSpace::Lab, 56.6293, 39.2371, 57.5538, 1.0, ColorSpace::Lch, 56.6293, 69.6562, 55.7159, 1.0),
+            (ColorSpace::Lch, 56.6293, 69.6562, 55.7159, 1.0, ColorSpace::Lab, 56.6293, 39.2371, 57.5538, 1.0),
+        ];
+
+        for (
+            from_color_space,
+            from_c0,
+            from_c1,
+            from_c2,
+            from_alpha,
+            to_color_space,
+            to_c0,
+            to_c1,
+            to_c2,
+            to_alpha,
+        ) in conversions
+        {
+            let from = Color::new(from_color_space, from_c0, from_c1, from_c2, from_alpha);
+            let to = Color::new(to_color_space, to_c0, to_c1, to_c2, to_alpha);
+
+            let result = from.to_color_space(to_color_space);
+
+            assert_eq!(result.color_space, to.color_space);
+            assert!(
+                almost_equal!(result.components[0], to.components[0]),
+                "c0 {} is not equal to {}",
+                result.components[0],
+                to.components[0]
+            );
+            assert!(
+                almost_equal!(result.components[1], to.components[1]),
+                "c1 {} is not equal to {}",
+                result.components[1],
+                to.components[1]
+            );
+            assert!(
+                almost_equal!(result.components[2], to.components[2]),
+                "c2 {} is not equal to {}",
+                result.components[2],
+                to.components[2]
+            );
+            assert!(
+                almost_equal!(result.alpha, to.alpha),
+                "alpha {} is not equal to {}",
+                result.alpha,
+                to.alpha
+            );
+        }
+    }
 }

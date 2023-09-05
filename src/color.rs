@@ -54,9 +54,12 @@ bitflags! {
     }
 }
 
+pub type Components = [f32; 3];
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Color {
-    pub components: [f32; 4],
+    pub components: Components,
+    pub alpha: f32,
     pub color_space: ColorSpace,
     pub flags: ColorFlags,
 }
@@ -128,7 +131,8 @@ impl Color {
         let alpha = component_details!(alpha, ColorFlags::ALPHA_IS_NONE);
 
         Self {
-            components: [c0, c1, c2, alpha],
+            components: [c0, c1, c2],
+            alpha,
             color_space,
             flags,
         }
