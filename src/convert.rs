@@ -1,4 +1,17 @@
-use crate::color::{Color, ColorSpace};
+use std::marker::PhantomData;
+
+use crate::color::{
+    Color, ColorSpace, Components, GammaEncoded, Hsl, Hwb, Lab, Lch, LinearLight, Rgb, Srgb,
+    WhitePointTag, Xyz, D50, D65,
+};
+
+type Transform = euclid::default::Transform3D<f32>;
+type Vector = euclid::default::Vector3D<f32>;
+
+fn transform(from: &Components, mat: &Transform) -> Components {
+    let result = mat.transform_vector3d(Vector::new(from[0], from[1], from[2]));
+    [result.x, result.y, result.z]
+}
 
 impl Color {
     pub fn to_color_space(&self, color_space: ColorSpace) -> Color {
@@ -42,7 +55,382 @@ impl Color {
             }
         }
 
+        // We have to go all the way to XYZ space to convert.
+        let xyz = match self.color_space {
+            C::Srgb => self.as_srgb().to_linear_light().to_xyz_d65().to_xyz_d50(),
+            C::Hsl => self
+                .as_hsl()
+                .to_srgb()
+                .to_linear_light()
+                .to_xyz_d65()
+                .to_xyz_d50(),
+            C::Hwb => self
+                .as_hwb()
+                .to_srgb()
+                .to_linear_light()
+                .to_xyz_d65()
+                .to_xyz_d50(),
+            C::Lab => self.as_lab().to_xyz_d50(),
+            C::Lch => self.as_lch().to_lab().to_xyz_d50(),
+            C::Oklab => todo!(),
+            C::Oklch => todo!(),
+            C::SrgbLinear => self.as_srgb_linear().to_xyz_d65().to_xyz_d50(),
+            C::DisplayP3 => todo!(),
+            C::A98Rgb => todo!(),
+            C::ProphotoRgb => todo!(),
+            C::Rec2020 => todo!(),
+            C::XyzD50 => Xyz::<D50> {
+                x: self.components[0],
+                y: self.components[1],
+                z: self.components[2],
+                alpha: self.alpha,
+                color_space: self.color_space,
+                flags: self.flags,
+                white_point: PhantomData,
+            },
+            C::XyzD65 => self.as_xyz_d65().to_xyz_d50(),
+        };
+
+        let _result: Color = unsafe {
+            match color_space {
+                C::Srgb => xyz.to_xyz_d65().to_srgb().to_gamma_encoded().into_color(),
+                C::Hsl => xyz
+                    .to_xyz_d65()
+                    .to_srgb()
+                    .to_gamma_encoded()
+                    .to_hsl()
+                    .into_color(),
+                C::Hwb => xyz
+                    .to_xyz_d65()
+                    .to_srgb()
+                    .to_gamma_encoded()
+                    .to_hwb()
+                    .into_color(),
+                C::Lab => xyz.to_lab().into_color(),
+                C::Lch => xyz.to_lab().to_lch().into_color(),
+                C::Oklab => todo!(),
+                C::Oklch => todo!(),
+                C::SrgbLinear => std::mem::transmute(xyz.to_xyz_d65().to_srgb()),
+                C::DisplayP3 => todo!(),
+                C::A98Rgb => todo!(),
+                C::ProphotoRgb => todo!(),
+                C::Rec2020 => todo!(),
+                C::XyzD50 => std::mem::transmute(xyz),
+                C::XyzD65 => std::mem::transmute(xyz.to_xyz_d65()),
+            }
+        };
+
         todo!()
+    }
+}
+
+impl Rgb<Srgb, GammaEncoded> {
+    fn to_linear_light(&self) -> Rgb<Srgb, LinearLight> {
+        let [red, green, blue] = [self.red, self.green, self.blue].map(|c| {
+            let abs = c.abs();
+
+            if abs < 0.04045 {
+                c / 12.92
+            } else {
+                c.signum() * ((abs + 0.055) / 1.055).powf(2.4)
+            }
+        });
+
+        Rgb {
+            red,
+            green,
+            blue,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            color_space_tag: PhantomData,
+            encoding_tag: PhantomData,
+        }
+    }
+
+    fn to_hsl(&self) -> Hsl {
+        let [hue, saturation, lightness] = util::rgb_to_hsl(self.components());
+        Hsl {
+            hue,
+            saturation,
+            lightness,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+        }
+    }
+
+    fn to_hwb(&self) -> Hwb {
+        let [hue, whiteness, blackness] = util::rgb_to_hwb(self.components());
+        Hwb {
+            hue,
+            whiteness,
+            blackness,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+        }
+    }
+}
+
+impl Rgb<Srgb, LinearLight> {
+    pub fn to_gamma_encoded(&self) -> Rgb<Srgb, GammaEncoded> {
+        let [red, green, blue] = self.components().map(|c| {
+            let abs = c.abs();
+
+            if abs > 0.0031308 {
+                c.signum() * (1.055 * abs.powf(1.0 / 2.4) - 0.055)
+            } else {
+                12.92 * c
+            }
+        });
+
+        Rgb {
+            red,
+            green,
+            blue,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            color_space_tag: PhantomData,
+            encoding_tag: PhantomData,
+        }
+    }
+
+    pub fn to_xyz_d65(&self) -> Xyz<D65> {
+        #[rustfmt::skip]
+        const TO_XYZ: Transform = Transform::new(
+            0.4123907992659595,  0.21263900587151036, 0.01933081871559185, 0.0,
+            0.35758433938387796, 0.7151686787677559,  0.11919477979462599, 0.0,
+            0.1804807884018343,  0.07219231536073371, 0.9505321522496606,  0.0,
+            0.0,                 0.0,                 0.0,                 1.0,
+        );
+
+        let [x, y, z] = transform(self.components(), &TO_XYZ);
+
+        Xyz {
+            x,
+            y,
+            z,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            white_point: PhantomData,
+        }
+    }
+}
+
+impl Hsl {
+    pub fn to_srgb(&self) -> Rgb<Srgb, GammaEncoded> {
+        let [red, green, blue] = util::hsl_to_rgb(self.components());
+        Rgb {
+            red,
+            green,
+            blue,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            color_space_tag: PhantomData,
+            encoding_tag: PhantomData,
+        }
+    }
+}
+
+impl Hwb {
+    pub fn to_srgb(&self) -> Rgb<Srgb, GammaEncoded> {
+        let [red, green, blue] = util::hwb_to_rgb(self.components());
+        Rgb {
+            red,
+            green,
+            blue,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            color_space_tag: PhantomData,
+            encoding_tag: PhantomData,
+        }
+    }
+}
+
+impl Lab {
+    const KAPPA: f32 = 24389.0 / 27.0;
+    const EPSILON: f32 = 216.0 / 24389.0;
+
+    pub fn to_xyz_d50(&self) -> Xyz<D50> {
+        let f1 = (self.lightness + 16.0) / 116.0;
+        let f0 = f1 + self.a / 500.0;
+        let f2 = f1 - self.b / 200.0;
+
+        let f0_cubed = f0 * f0 * f0;
+        let x = if f0_cubed > Self::EPSILON {
+            f0_cubed
+        } else {
+            (116.0 * f0 - 16.0) / Self::KAPPA
+        };
+
+        let y = if self.lightness > Self::KAPPA * Self::EPSILON {
+            let v = (self.lightness + 16.0) / 116.0;
+            v * v * v
+        } else {
+            self.lightness / Self::KAPPA
+        };
+
+        let f2_cubed = f2 * f2 * f2;
+        let z = if f2_cubed > Self::EPSILON {
+            f2_cubed
+        } else {
+            (116.0 * f2 - 16.0) / Self::KAPPA
+        };
+
+        Xyz {
+            x: x * D50::WHITE_POINT[0],
+            y: y * D50::WHITE_POINT[1],
+            z: z * D50::WHITE_POINT[2],
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            white_point: PhantomData,
+        }
+    }
+
+    pub fn to_lch(&self) -> Lch {
+        let [lightness, chroma, hue] = util::orthogonal_to_polar(self.components());
+        Lch {
+            lightness,
+            chroma,
+            hue,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+        }
+    }
+}
+
+impl Lch {
+    pub fn to_lab(&self) -> Lab {
+        let [lightness, a, b] = util::polar_to_orthogonal(self.components());
+
+        Lab {
+            lightness,
+            a,
+            b,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+        }
+    }
+}
+
+impl Xyz<D50> {
+    pub fn to_xyz_d65(&self) -> Xyz<D65> {
+        #[rustfmt::skip]
+        const MAT: Transform = Transform::new(
+             0.9554734527042182,   -0.028369706963208136,  0.012314001688319899, 0.0,
+            -0.023098536874261423,  1.0099954580058226,   -0.020507696433477912, 0.0,
+             0.0632593086610217,    0.021041398966943008,  1.3303659366080753,   0.0,
+             0.0,                   0.0,                   0.0,                  1.0,
+        );
+
+        let [x, y, z] = transform(self.components(), &MAT);
+
+        Xyz {
+            x,
+            y,
+            z,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            white_point: PhantomData,
+        }
+    }
+
+    fn to_lab(&self) -> Lab {
+        const KAPPA: f32 = 24389.0 / 27.0;
+        const EPSILON: f32 = 216.0 / 24389.0;
+
+        let adapted = [
+            self.x / D50::WHITE_POINT[0],
+            self.y / D50::WHITE_POINT[1],
+            self.z / D50::WHITE_POINT[2],
+        ];
+
+        // 4. Convert D50-adapted XYZ to Lab.
+        let [f0, f1, f2] = adapted.map(|v| {
+            if v > EPSILON {
+                v.cbrt()
+            } else {
+                (KAPPA * v + 16.0) / 116.0
+            }
+        });
+
+        let lightness = 116.0 * f1 - 16.0;
+        let a = 500.0 * (f0 - f1);
+        let b = 200.0 * (f1 - f2);
+
+        Lab {
+            lightness,
+            a,
+            b,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+        }
+    }
+}
+
+impl Xyz<D65> {
+    pub fn to_srgb(&self) -> Rgb<Srgb, LinearLight> {
+        #[rustfmt::skip]
+        const FROM_XYZ: Transform = Transform::new(
+             3.2409699419045213, -0.9692436362808798,  0.05563007969699361, 0.0,
+            -1.5373831775700935,  1.8759675015077206, -0.20397695888897657, 0.0,
+            -0.4986107602930033,  0.04155505740717561, 1.0569715142428786,  0.0,
+             0.0,                 0.0,                 0.0,                 1.0,
+        );
+
+        let [red, green, blue] = transform(self.components(), &FROM_XYZ);
+
+        Rgb {
+            red,
+            green,
+            blue,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            color_space_tag: PhantomData,
+            encoding_tag: PhantomData,
+        }
+    }
+
+    pub fn to_xyz_d50(&self) -> Xyz<D50> {
+        #[rustfmt::skip]
+        const MAT: Transform = Transform::new(
+             1.0479298208405488,    0.029627815688159344, -0.009243058152591178, 0.0,
+             0.022946793341019088,  0.990434484573249,     0.015055144896577895, 0.0,
+            -0.05019222954313557,  -0.01707382502938514,   0.7518742899580008,   0.0,
+             0.0,                   0.0,                   0.0,                  1.0,
+        );
+
+        let [x, y, z] = transform(self.components(), &MAT);
+
+        Xyz {
+            x,
+            y,
+            z,
+            alpha: self.alpha,
+            color_space: self.color_space,
+            flags: self.flags,
+
+            white_point: PhantomData,
+        }
     }
 }
 
