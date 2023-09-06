@@ -3,7 +3,6 @@ use bitflags::bitflags;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ColorSpace {
     Srgb,
-    SrgbLegacy,
     Hsl,
     Hwb,
     Lab,
@@ -22,12 +21,7 @@ impl ColorSpace {
     pub fn is_rgb_line(&self) -> bool {
         matches!(
             self,
-            Self::Srgb
-                | Self::SrgbLegacy
-                | Self::DisplayP3
-                | Self::A98Rgb
-                | Self::ProphotoRgb
-                | Self::Rec2020
+            Self::Srgb | Self::DisplayP3 | Self::A98Rgb | Self::ProphotoRgb | Self::Rec2020
         )
     }
 

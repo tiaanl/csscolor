@@ -14,17 +14,8 @@ impl Color {
                 let [hue, saturation, lightness] = util::rgb_to_hsl(&self.components);
                 return Self::new(color_space, hue, saturation, lightness, self.alpha);
             }
-            (C::SrgbLegacy, C::Hsl) => {
-                let [hue, saturation, lightness] =
-                    util::rgb_to_hsl(&self.components.map(|c| c / 255.0));
-                return Self::new(color_space, hue, saturation, lightness, self.alpha);
-            }
             (C::Hsl, C::Srgb) => {
                 let [red, green, blue] = util::hsl_to_rgb(&self.components);
-                return Self::new(color_space, red, green, blue, self.alpha);
-            }
-            (C::Hsl, C::SrgbLegacy) => {
-                let [red, green, blue] = util::hsl_to_rgb(&self.components).map(|c| c * 255.0);
                 return Self::new(color_space, red, green, blue, self.alpha);
             }
 
@@ -32,17 +23,8 @@ impl Color {
                 let [hue, whiteness, blackness] = util::rgb_to_hwb(&self.components);
                 return Self::new(color_space, hue, whiteness, blackness, self.alpha);
             }
-            (C::SrgbLegacy, C::Hwb) => {
-                let [hue, whiteness, blackness] =
-                    util::rgb_to_hwb(&self.components.map(|c| c / 255.0));
-                return Self::new(color_space, hue, whiteness, blackness, self.alpha);
-            }
             (C::Hwb, C::Srgb) => {
                 let [red, green, blue] = util::hwb_to_rgb(&self.components);
-                return Self::new(color_space, red, green, blue, self.alpha);
-            }
-            (C::Hwb, C::SrgbLegacy) => {
-                let [red, green, blue] = util::hwb_to_rgb(&self.components).map(|c| c * 255.0);
                 return Self::new(color_space, red, green, blue, self.alpha);
             }
 
