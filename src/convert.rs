@@ -1,9 +1,10 @@
-use std::marker::PhantomData;
-
-use crate::color::{
-    tag, Color, ColorSpace, ColorSpaceModel, Components, D50Tag, D65Tag, Hsl, Hwb, Lab, Lch, Rgb,
-    Srgb, SrgbLinear, WhitePointTag, Xyz, XyzD65,
+use crate::{
+    color::{Color, ColorSpace, Components},
+    model::{ColorSpaceModel, WhitePoint},
+    Hsl, Hwb,
 };
+use crate::{Lab, Lch, Srgb, SrgbLinear, XyzD50, XyzD65, D50};
+use std::marker::PhantomData;
 
 type Transform = euclid::default::Transform3D<f32>;
 type Vector = euclid::default::Vector3D<f32>;
@@ -83,7 +84,7 @@ impl Color {
             C::A98Rgb => todo!(),
             C::ProphotoRgb => todo!(),
             C::Rec2020 => todo!(),
-            C::XyzD50 => Xyz::<D50Tag> {
+            C::XyzD50 => XyzD50 {
                 x: self.components[0],
                 y: self.components[1],
                 z: self.components[2],
@@ -128,8 +129,8 @@ impl Color {
     }
 }
 
-impl Rgb<tag::Srgb, tag::GammaEncoded> {
-    fn to_linear_light(&self) -> Rgb<tag::Srgb, tag::LinearLight> {
+impl Srgb {
+    fn to_linear_light(&self) -> SrgbLinear {
         let [red, green, blue] = [self.red, self.green, self.blue].map(|c| {
             let abs = c.abs();
 
@@ -140,7 +141,7 @@ impl Rgb<tag::Srgb, tag::GammaEncoded> {
             }
         });
 
-        Rgb {
+        SrgbLinear {
             red,
             green,
             blue,
@@ -172,8 +173,8 @@ impl Rgb<tag::Srgb, tag::GammaEncoded> {
     }
 }
 
-impl Rgb<tag::Srgb, tag::LinearLight> {
-    pub fn to_gamma_encoded(&self) -> Rgb<tag::Srgb, tag::GammaEncoded> {
+impl SrgbLinear {
+    pub fn to_gamma_encoded(&self) -> Srgb {
         let [red, green, blue] = self.components().map(|c| {
             let abs = c.abs();
 
@@ -184,7 +185,7 @@ impl Rgb<tag::Srgb, tag::LinearLight> {
             }
         });
 
-        Rgb {
+        Srgb {
             red,
             green,
             blue,
@@ -195,7 +196,7 @@ impl Rgb<tag::Srgb, tag::LinearLight> {
         }
     }
 
-    pub fn to_xyz_d65(&self) -> Xyz<D65Tag> {
+    pub fn to_xyz_d65(&self) -> XyzD65 {
         #[rustfmt::skip]
         const TO_XYZ: Transform = Transform::new(
             0.4123907992659595,  0.21263900587151036, 0.01933081871559185, 0.0,
@@ -206,7 +207,7 @@ impl Rgb<tag::Srgb, tag::LinearLight> {
 
         let [x, y, z] = transform(self.components(), &TO_XYZ);
 
-        Xyz {
+        XyzD65 {
             x,
             y,
             z,
@@ -218,9 +219,9 @@ impl Rgb<tag::Srgb, tag::LinearLight> {
 }
 
 impl Hsl {
-    pub fn to_srgb(&self) -> Rgb<tag::Srgb, tag::GammaEncoded> {
+    pub fn to_srgb(&self) -> Srgb {
         let [red, green, blue] = util::hsl_to_rgb(self.components());
-        Rgb {
+        Srgb {
             red,
             green,
             blue,
@@ -233,9 +234,9 @@ impl Hsl {
 }
 
 impl Hwb {
-    pub fn to_srgb(&self) -> Rgb<tag::Srgb, tag::GammaEncoded> {
+    pub fn to_srgb(&self) -> Srgb {
         let [red, green, blue] = util::hwb_to_rgb(self.components());
-        Rgb {
+        Srgb {
             red,
             green,
             blue,
@@ -251,7 +252,7 @@ impl Lab {
     const KAPPA: f32 = 24389.0 / 27.0;
     const EPSILON: f32 = 216.0 / 24389.0;
 
-    pub fn to_xyz_d50(&self) -> Xyz<D50Tag> {
+    pub fn to_xyz_d50(&self) -> XyzD50 {
         let f1 = (self.lightness + 16.0) / 116.0;
         let f0 = f1 + self.a / 500.0;
         let f2 = f1 - self.b / 200.0;
@@ -277,10 +278,10 @@ impl Lab {
             (116.0 * f2 - 16.0) / Self::KAPPA
         };
 
-        Xyz {
-            x: x * D50Tag::WHITE_POINT[0],
-            y: y * D50Tag::WHITE_POINT[1],
-            z: z * D50Tag::WHITE_POINT[2],
+        XyzD50 {
+            x: x * D50::WHITE_POINT[0],
+            y: y * D50::WHITE_POINT[1],
+            z: z * D50::WHITE_POINT[2],
             flags: self.flags,
 
             white_point: PhantomData,
@@ -311,8 +312,8 @@ impl Lch {
     }
 }
 
-impl Xyz<D50Tag> {
-    pub fn to_xyz_d65(&self) -> Xyz<D65Tag> {
+impl XyzD50 {
+    pub fn to_xyz_d65(&self) -> XyzD65 {
         #[rustfmt::skip]
         const MAT: Transform = Transform::new(
              0.9554734527042182,   -0.028369706963208136,  0.012314001688319899, 0.0,
@@ -323,7 +324,7 @@ impl Xyz<D50Tag> {
 
         let [x, y, z] = transform(self.components(), &MAT);
 
-        Xyz {
+        XyzD65 {
             x,
             y,
             z,
@@ -338,9 +339,9 @@ impl Xyz<D50Tag> {
         const EPSILON: f32 = 216.0 / 24389.0;
 
         let adapted = [
-            self.x / D50Tag::WHITE_POINT[0],
-            self.y / D50Tag::WHITE_POINT[1],
-            self.z / D50Tag::WHITE_POINT[2],
+            self.x / D50::WHITE_POINT[0],
+            self.y / D50::WHITE_POINT[1],
+            self.z / D50::WHITE_POINT[2],
         ];
 
         // 4. Convert D50-adapted XYZ to Lab.
@@ -365,8 +366,8 @@ impl Xyz<D50Tag> {
     }
 }
 
-impl Xyz<D65Tag> {
-    pub fn to_srgb(&self) -> Rgb<tag::Srgb, tag::LinearLight> {
+impl XyzD65 {
+    pub fn to_srgb(&self) -> SrgbLinear {
         #[rustfmt::skip]
         const FROM_XYZ: Transform = Transform::new(
              3.2409699419045213, -0.9692436362808798,  0.05563007969699361, 0.0,
@@ -377,7 +378,7 @@ impl Xyz<D65Tag> {
 
         let [red, green, blue] = transform(self.components(), &FROM_XYZ);
 
-        Rgb {
+        SrgbLinear {
             red,
             green,
             blue,
@@ -388,7 +389,7 @@ impl Xyz<D65Tag> {
         }
     }
 
-    pub fn to_xyz_d50(&self) -> Xyz<D50Tag> {
+    pub fn to_xyz_d50(&self) -> XyzD50 {
         #[rustfmt::skip]
         const MAT: Transform = Transform::new(
              1.0479298208405488,    0.029627815688159344, -0.009243058152591178, 0.0,
@@ -399,7 +400,7 @@ impl Xyz<D65Tag> {
 
         let [x, y, z] = transform(self.components(), &MAT);
 
-        Xyz {
+        XyzD50 {
             x,
             y,
             z,
