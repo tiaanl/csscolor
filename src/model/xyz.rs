@@ -24,7 +24,20 @@ pub struct Xyz<W: WhitePoint> {
     pub z: f32,
     pub flags: ColorFlags,
 
-    pub white_point: PhantomData<W>,
+    white_point: PhantomData<W>,
+}
+
+impl<W: WhitePoint> Xyz<W> {
+    pub fn new(x: f32, y: f32, z: f32, flags: ColorFlags) -> Self {
+        Self {
+            x,
+            y,
+            z,
+            flags,
+
+            white_point: PhantomData,
+        }
+    }
 }
 
 pub type XyzD50 = Xyz<D50>;

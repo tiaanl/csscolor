@@ -4,7 +4,6 @@ use crate::{
     Hsl, Hwb,
 };
 use crate::{Lab, Lch, Srgb, SrgbLinear, XyzD50, XyzD65, D50};
-use std::marker::PhantomData;
 
 type Transform = euclid::default::Transform3D<f32>;
 type Vector = euclid::default::Vector3D<f32>;
@@ -84,13 +83,12 @@ impl Color {
             C::A98Rgb => todo!(),
             C::ProphotoRgb => todo!(),
             C::Rec2020 => todo!(),
-            C::XyzD50 => XyzD50 {
-                x: self.components[0],
-                y: self.components[1],
-                z: self.components[2],
-                flags: self.flags,
-                white_point: PhantomData,
-            },
+            C::XyzD50 => XyzD50::new(
+                self.components[0],
+                self.components[1],
+                self.components[2],
+                self.flags,
+            ),
             C::XyzD65 => self.as_model::<XyzD65>().to_xyz_d50(),
         };
 
@@ -141,15 +139,7 @@ impl Srgb {
             }
         });
 
-        SrgbLinear {
-            red,
-            green,
-            blue,
-            flags: self.flags,
-
-            color_space_tag: PhantomData,
-            encoding_tag: PhantomData,
-        }
+        SrgbLinear::new(red, green, blue, self.flags)
     }
 
     fn to_hsl(&self) -> Hsl {
@@ -185,15 +175,7 @@ impl SrgbLinear {
             }
         });
 
-        Srgb {
-            red,
-            green,
-            blue,
-            flags: self.flags,
-
-            color_space_tag: PhantomData,
-            encoding_tag: PhantomData,
-        }
+        Srgb::new(red, green, blue, self.flags)
     }
 
     pub fn to_xyz_d65(&self) -> XyzD65 {
@@ -207,44 +189,21 @@ impl SrgbLinear {
 
         let [x, y, z] = transform(self.components(), &TO_XYZ);
 
-        XyzD65 {
-            x,
-            y,
-            z,
-            flags: self.flags,
-
-            white_point: PhantomData,
-        }
+        XyzD65::new(x, y, z, self.flags)
     }
 }
 
 impl Hsl {
     pub fn to_srgb(&self) -> Srgb {
         let [red, green, blue] = util::hsl_to_rgb(self.components());
-        Srgb {
-            red,
-            green,
-            blue,
-            flags: self.flags,
-
-            color_space_tag: PhantomData,
-            encoding_tag: PhantomData,
-        }
+        Srgb::new(red, green, blue, self.flags)
     }
 }
 
 impl Hwb {
     pub fn to_srgb(&self) -> Srgb {
         let [red, green, blue] = util::hwb_to_rgb(self.components());
-        Srgb {
-            red,
-            green,
-            blue,
-            flags: self.flags,
-
-            color_space_tag: PhantomData,
-            encoding_tag: PhantomData,
-        }
+        Srgb::new(red, green, blue, self.flags)
     }
 }
 
@@ -278,14 +237,12 @@ impl Lab {
             (116.0 * f2 - 16.0) / Self::KAPPA
         };
 
-        XyzD50 {
-            x: x * D50::WHITE_POINT[0],
-            y: y * D50::WHITE_POINT[1],
-            z: z * D50::WHITE_POINT[2],
-            flags: self.flags,
-
-            white_point: PhantomData,
-        }
+        XyzD50::new(
+            x * D50::WHITE_POINT[0],
+            y * D50::WHITE_POINT[1],
+            z * D50::WHITE_POINT[2],
+            self.flags,
+        )
     }
 
     pub fn to_lch(&self) -> Lch {
@@ -324,14 +281,7 @@ impl XyzD50 {
 
         let [x, y, z] = transform(self.components(), &MAT);
 
-        XyzD65 {
-            x,
-            y,
-            z,
-            flags: self.flags,
-
-            white_point: PhantomData,
-        }
+        XyzD65::new(x, y, z, self.flags)
     }
 
     fn to_lab(&self) -> Lab {
@@ -378,15 +328,7 @@ impl XyzD65 {
 
         let [red, green, blue] = transform(self.components(), &FROM_XYZ);
 
-        SrgbLinear {
-            red,
-            green,
-            blue,
-            flags: self.flags,
-
-            color_space_tag: PhantomData,
-            encoding_tag: PhantomData,
-        }
+        SrgbLinear::new(red, green, blue, self.flags)
     }
 
     pub fn to_xyz_d50(&self) -> XyzD50 {
@@ -400,14 +342,7 @@ impl XyzD65 {
 
         let [x, y, z] = transform(self.components(), &MAT);
 
-        XyzD50 {
-            x,
-            y,
-            z,
-            flags: self.flags,
-
-            white_point: PhantomData,
-        }
+        XyzD50::new(x, y, z, self.flags)
     }
 }
 

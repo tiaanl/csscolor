@@ -38,8 +38,22 @@ pub struct Rgb<C: tag::RgbColorSpace, E: tag::RgbEncoding> {
     pub blue: f32,
     pub flags: ColorFlags,
 
-    pub color_space_tag: PhantomData<C>,
-    pub encoding_tag: PhantomData<E>,
+    color_space_tag: PhantomData<C>,
+    encoding_tag: PhantomData<E>,
+}
+
+impl<C: tag::RgbColorSpace, E: tag::RgbEncoding> Rgb<C, E> {
+    pub fn new(red: f32, green: f32, blue: f32, flags: ColorFlags) -> Self {
+        Self {
+            red,
+            green,
+            blue,
+            flags,
+
+            color_space_tag: PhantomData,
+            encoding_tag: PhantomData,
+        }
+    }
 }
 
 pub type Srgb = Rgb<tag::Srgb, tag::GammaEncoded>;
