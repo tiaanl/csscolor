@@ -144,22 +144,12 @@ impl Srgb {
 
     fn to_hsl(&self) -> Hsl {
         let [hue, saturation, lightness] = util::rgb_to_hsl(self.components());
-        Hsl {
-            hue,
-            saturation,
-            lightness,
-            flags: self.flags,
-        }
+        Hsl::new(hue, saturation, lightness, self.flags)
     }
 
     fn to_hwb(&self) -> Hwb {
         let [hue, whiteness, blackness] = util::rgb_to_hwb(self.components());
-        Hwb {
-            hue,
-            whiteness,
-            blackness,
-            flags: self.flags,
-        }
+        Hwb::new(hue, whiteness, blackness, self.flags)
     }
 }
 
@@ -247,12 +237,7 @@ impl Lab {
 
     pub fn to_lch(&self) -> Lch {
         let [lightness, chroma, hue] = util::orthogonal_to_polar(self.components());
-        Lch {
-            lightness,
-            chroma,
-            hue,
-            flags: self.flags,
-        }
+        Lch::new(lightness, chroma, hue, self.flags)
     }
 }
 
@@ -260,12 +245,7 @@ impl Lch {
     pub fn to_lab(&self) -> Lab {
         let [lightness, a, b] = util::polar_to_orthogonal(self.components());
 
-        Lab {
-            lightness,
-            a,
-            b,
-            flags: self.flags,
-        }
+        Lab::new(lightness, a, b, self.flags)
     }
 }
 
@@ -307,12 +287,7 @@ impl XyzD50 {
         let a = 500.0 * (f0 - f1);
         let b = 200.0 * (f1 - f2);
 
-        Lab {
-            lightness,
-            a,
-            b,
-            flags: self.flags,
-        }
+        Lab::new(lightness, a, b, self.flags)
     }
 }
 

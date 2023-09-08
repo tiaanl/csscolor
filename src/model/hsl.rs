@@ -10,6 +10,17 @@ pub struct Hsl {
     pub flags: ColorFlags,
 }
 
+impl Hsl {
+    pub fn new(hue: f32, saturation: f32, lightness: f32, flags: ColorFlags) -> Self {
+        Self {
+            hue,
+            saturation,
+            lightness,
+            flags,
+        }
+    }
+}
+
 impl ColorSpaceModel for Hsl {
     const COLOR_SPACE: ColorSpace = ColorSpace::Hsl;
 

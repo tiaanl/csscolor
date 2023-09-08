@@ -10,6 +10,17 @@ pub struct Hwb {
     pub flags: ColorFlags,
 }
 
+impl Hwb {
+    pub fn new(hue: f32, whiteness: f32, blackness: f32, flags: ColorFlags) -> Self {
+        Self {
+            hue,
+            whiteness,
+            blackness,
+            flags,
+        }
+    }
+}
+
 impl ColorSpaceModel for Hwb {
     const COLOR_SPACE: ColorSpace = ColorSpace::Hwb;
 

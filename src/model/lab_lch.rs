@@ -9,6 +9,17 @@ pub struct Lab {
     pub flags: ColorFlags,
 }
 
+impl Lab {
+    pub fn new(lightness: f32, a: f32, b: f32, flags: ColorFlags) -> Self {
+        Self {
+            lightness,
+            a,
+            b,
+            flags,
+        }
+    }
+}
+
 impl ColorSpaceModel for Lab {
     const COLOR_SPACE: ColorSpace = ColorSpace::Lab;
 
@@ -28,6 +39,17 @@ pub struct Lch {
     pub chroma: f32,
     pub hue: f32,
     pub flags: ColorFlags,
+}
+
+impl Lch {
+    pub fn new(lightness: f32, chroma: f32, hue: f32, flags: ColorFlags) -> Self {
+        Self {
+            lightness,
+            chroma,
+            hue,
+            flags,
+        }
+    }
 }
 
 impl ColorSpaceModel for Lch {
