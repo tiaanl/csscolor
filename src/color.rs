@@ -21,7 +21,7 @@ pub enum ColorSpace {
 }
 
 impl ColorSpace {
-    pub fn is_rgb_line(&self) -> bool {
+    pub fn is_rgb_like(&self) -> bool {
         matches!(
             self,
             Self::Srgb | Self::DisplayP3 | Self::A98Rgb | Self::ProphotoRgb | Self::Rec2020
@@ -54,11 +54,12 @@ bitflags! {
 pub type Components = [f32; 3];
 
 #[derive(Clone, PartialEq, Debug)]
+#[repr(C)]
 pub struct Color {
     pub components: Components,
-    pub alpha: f32,
-    pub color_space: ColorSpace,
     pub flags: ColorFlags,
+    pub color_space: ColorSpace,
+    pub alpha: f32,
 }
 
 /// Implement a From<*> for this struct to allow components of that type to be
@@ -129,219 +130,249 @@ impl Color {
 
         Self {
             components: [c0, c1, c2],
-            alpha,
-            color_space,
             flags,
+            color_space,
+            alpha,
         }
     }
 
-    pub fn as_srgb(&self) -> &Rgb<Srgb, GammaEncoded> {
-        if self.color_space != ColorSpace::Srgb {
-            panic!("Color not in requested color space.");
-        }
-        unsafe { std::mem::transmute(self) }
-    }
-
-    pub fn as_srgb_linear(&self) -> &Rgb<Srgb, LinearLight> {
-        if self.color_space != ColorSpace::SrgbLinear {
-            panic!("Color not in requested color space.");
-        }
-        unsafe { std::mem::transmute(self) }
-    }
-
-    pub fn as_hsl(&self) -> &Hsl {
-        if self.color_space != ColorSpace::Hsl {
-            panic!("Color not in requested color space.");
-        }
-        unsafe { std::mem::transmute(self) }
-    }
-
-    pub fn as_hwb(&self) -> &Hwb {
-        if self.color_space != ColorSpace::Hwb {
-            panic!("Color not in requested color space.");
-        }
-        unsafe { std::mem::transmute(self) }
-    }
-
-    pub fn as_lab(&self) -> &Lab {
-        if self.color_space != ColorSpace::Lab {
-            panic!("Color not in requested color space.");
-        }
-        unsafe { std::mem::transmute(self) }
-    }
-
-    pub fn as_lch(&self) -> &Lch {
-        if self.color_space != ColorSpace::Lch {
-            panic!("Color not in requested color space.");
-        }
-        unsafe { std::mem::transmute(self) }
-    }
-
-    pub fn as_xyz_d50(&self) -> &Xyz<D50> {
-        if self.color_space != ColorSpace::XyzD50 {
-            panic!("Color not in requested color space.");
-        }
-        unsafe { std::mem::transmute(self) }
-    }
-
-    pub fn as_xyz_d65(&self) -> &Xyz<D65> {
-        if self.color_space != ColorSpace::XyzD65 {
-            panic!("Color not in requested color space.");
+    pub fn as_model<C: ColorSpaceModel>(&self) -> &C {
+        if self.color_space != C::COLOR_SPACE {
+            panic!(
+                "Color is not in the requested color space ({:?})",
+                C::COLOR_SPACE
+            );
         }
         unsafe { std::mem::transmute(self) }
     }
 }
 
-macro_rules! impl_color_space_struct {
-    ($space:tt) => {
-        pub fn components(&self) -> &Components {
-            if self.color_space != ColorSpace::$space {
-                panic!("Color not in requested color space.");
-            }
-            unsafe { std::mem::transmute(self) }
-        }
+pub trait ColorSpaceModel {
+    const COLOR_SPACE: ColorSpace;
 
-        pub fn into_color(self) -> Color {
-            unsafe { std::mem::transmute(self) }
-        }
-    };
+    fn components(&self) -> &Components
+    where
+        Self: Sized,
+    {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn into_color(self, alpha: f32) -> Color;
 }
 
-pub trait RgbColorSpaceTag {}
-
-pub trait RgbEncodingTag {}
-
-pub struct Srgb;
-
-impl RgbColorSpaceTag for Srgb {}
-
-pub struct DisplayP3;
-
-impl RgbColorSpaceTag for DisplayP3 {}
-
-pub struct A98Rgb;
-
-impl RgbColorSpaceTag for A98Rgb {}
-
-pub struct ProphotoRgb;
-
-impl RgbColorSpaceTag for ProphotoRgb {}
-
-pub struct Rec2020;
-
-impl RgbColorSpaceTag for Rec2020 {}
-
-pub struct GammaEncoded;
-
-impl RgbEncodingTag for GammaEncoded {}
-
-pub struct LinearLight;
-
-impl RgbEncodingTag for LinearLight {}
-
-pub struct Rgb<C: RgbColorSpaceTag, E: RgbEncodingTag> {
+#[repr(C)]
+pub struct Rgb<C: tag::RgbColorSpace, E: tag::RgbEncoding> {
     pub red: f32,
     pub green: f32,
     pub blue: f32,
-    pub alpha: f32,
-    pub color_space: ColorSpace,
     pub flags: ColorFlags,
 
     pub color_space_tag: PhantomData<C>,
     pub encoding_tag: PhantomData<E>,
 }
 
-impl Rgb<Srgb, GammaEncoded> {
-    impl_color_space_struct!(Srgb);
+pub type Srgb = Rgb<tag::Srgb, tag::GammaEncoded>;
+
+impl ColorSpaceModel for Srgb {
+    const COLOR_SPACE: ColorSpace = ColorSpace::Srgb;
+
+    fn into_color(self, alpha: f32) -> Color {
+        Color {
+            components: [self.red, self.green, self.blue],
+            flags: self.flags,
+            color_space: Self::COLOR_SPACE,
+            alpha,
+        }
+    }
 }
 
-impl Rgb<Srgb, LinearLight> {
-    impl_color_space_struct!(SrgbLinear);
+pub type SrgbLinear = Rgb<tag::Srgb, tag::LinearLight>;
+
+impl ColorSpaceModel for SrgbLinear {
+    const COLOR_SPACE: ColorSpace = ColorSpace::SrgbLinear;
+
+    fn into_color(self, alpha: f32) -> Color {
+        Color {
+            components: [self.red, self.green, self.blue],
+            flags: self.flags,
+            color_space: Self::COLOR_SPACE,
+            alpha,
+        }
+    }
 }
 
+#[repr(C)]
 pub struct Hsl {
     pub hue: f32,
     pub saturation: f32,
     pub lightness: f32,
-    pub alpha: f32,
-    pub color_space: ColorSpace,
     pub flags: ColorFlags,
 }
 
-impl Hsl {
-    impl_color_space_struct!(Hsl);
+impl ColorSpaceModel for Hsl {
+    const COLOR_SPACE: ColorSpace = ColorSpace::Hsl;
+
+    fn into_color(self, alpha: f32) -> Color {
+        Color {
+            components: [self.hue, self.saturation, self.lightness],
+            flags: self.flags,
+            color_space: Self::COLOR_SPACE,
+            alpha,
+        }
+    }
 }
 
+#[repr(C)]
 pub struct Hwb {
     pub hue: f32,
     pub whiteness: f32,
     pub blackness: f32,
-    pub alpha: f32,
-    pub color_space: ColorSpace,
     pub flags: ColorFlags,
 }
 
-impl Hwb {
-    impl_color_space_struct!(Hwb);
+impl ColorSpaceModel for Hwb {
+    const COLOR_SPACE: ColorSpace = ColorSpace::Hwb;
+
+    fn into_color(self, alpha: f32) -> Color {
+        Color {
+            components: [self.hue, self.whiteness, self.blackness],
+            flags: self.flags,
+            color_space: Self::COLOR_SPACE,
+            alpha,
+        }
+    }
 }
 
+#[repr(C)]
 pub struct Lab {
     pub lightness: f32,
     pub a: f32,
     pub b: f32,
-    pub alpha: f32,
-    pub color_space: ColorSpace,
     pub flags: ColorFlags,
 }
 
-impl Lab {
-    impl_color_space_struct!(Lab);
+impl ColorSpaceModel for Lab {
+    const COLOR_SPACE: ColorSpace = ColorSpace::Lab;
+
+    fn into_color(self, alpha: f32) -> Color {
+        Color {
+            components: [self.lightness, self.a, self.b],
+            flags: self.flags,
+            color_space: Self::COLOR_SPACE,
+            alpha,
+        }
+    }
 }
 
+#[repr(C)]
 pub struct Lch {
     pub lightness: f32,
     pub chroma: f32,
     pub hue: f32,
-    pub alpha: f32,
-    pub color_space: ColorSpace,
     pub flags: ColorFlags,
 }
 
-impl Lch {
-    impl_color_space_struct!(Lch);
+impl ColorSpaceModel for Lch {
+    const COLOR_SPACE: ColorSpace = ColorSpace::Lch;
+
+    fn into_color(self, alpha: f32) -> Color {
+        Color {
+            components: [self.lightness, self.chroma, self.hue],
+            flags: self.flags,
+            color_space: Self::COLOR_SPACE,
+            alpha,
+        }
+    }
 }
 
 pub trait WhitePointTag {
     const WHITE_POINT: Components;
 }
 
-pub struct D50;
+pub struct D50Tag;
 
-impl WhitePointTag for D50 {
+impl WhitePointTag for D50Tag {
     const WHITE_POINT: Components = [0.9642956764295677, 1.0, 0.8251046025104602];
 }
 
-pub struct D65;
+pub struct D65Tag;
 
-impl WhitePointTag for D65 {
+impl WhitePointTag for D65Tag {
     const WHITE_POINT: Components = [0.9504559270516716, 1.0, 1.0890577507598784];
 }
 
+#[repr(C)]
 pub struct Xyz<W: WhitePointTag> {
     pub x: f32,
     pub y: f32,
     pub z: f32,
-    pub alpha: f32,
-    pub color_space: ColorSpace,
     pub flags: ColorFlags,
 
     pub white_point: PhantomData<W>,
 }
 
-impl<W: WhitePointTag> Xyz<W> {
-    pub fn components(&self) -> &Components {
-        unsafe { std::mem::transmute(self) }
+pub type XyzD50 = Xyz<D50Tag>;
+
+impl ColorSpaceModel for XyzD50 {
+    const COLOR_SPACE: ColorSpace = ColorSpace::XyzD50;
+
+    fn into_color(self, alpha: f32) -> Color {
+        Color {
+            components: [self.x, self.y, self.z],
+            flags: self.flags,
+            color_space: Self::COLOR_SPACE,
+            alpha,
+        }
     }
+}
+
+pub type XyzD65 = Xyz<D65Tag>;
+
+impl ColorSpaceModel for XyzD65 {
+    const COLOR_SPACE: ColorSpace = ColorSpace::XyzD65;
+
+    fn into_color(self, alpha: f32) -> Color {
+        Color {
+            components: [self.x, self.y, self.z],
+            flags: self.flags,
+            color_space: Self::COLOR_SPACE,
+            alpha,
+        }
+    }
+}
+
+pub mod tag {
+    pub trait RgbColorSpace {}
+
+    pub trait RgbEncoding {}
+
+    pub struct Srgb;
+
+    impl RgbColorSpace for Srgb {}
+
+    pub struct DisplayP3;
+
+    impl RgbColorSpace for DisplayP3 {}
+
+    pub struct A98Rgb;
+
+    impl RgbColorSpace for A98Rgb {}
+
+    pub struct ProphotoRgb;
+
+    impl RgbColorSpace for ProphotoRgb {}
+
+    pub struct Rec2020;
+
+    impl RgbColorSpace for Rec2020 {}
+
+    pub struct GammaEncoded;
+
+    impl RgbEncoding for GammaEncoded {}
+
+    pub struct LinearLight;
+
+    impl RgbEncoding for LinearLight {}
 }
 
 #[cfg(test)]
