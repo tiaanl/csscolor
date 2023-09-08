@@ -1,5 +1,5 @@
 use super::ColorSpaceModel;
-use crate::{Color, ColorFlags, ColorSpace};
+use crate::{Color, ColorFlags, ColorSpace, Components};
 
 #[repr(C)]
 pub struct Lab {
@@ -25,7 +25,7 @@ impl ColorSpaceModel for Lab {
 
     fn into_color(self, alpha: f32) -> Color {
         Color {
-            components: [self.lightness, self.a, self.b],
+            components: Components(self.lightness, self.a, self.b),
             flags: self.flags,
             color_space: Self::COLOR_SPACE,
             alpha,
@@ -57,7 +57,7 @@ impl ColorSpaceModel for Lch {
 
     fn into_color(self, alpha: f32) -> Color {
         Color {
-            components: [self.lightness, self.chroma, self.hue],
+            components: Components(self.lightness, self.chroma, self.hue),
             flags: self.flags,
             color_space: Self::COLOR_SPACE,
             alpha,

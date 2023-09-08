@@ -9,8 +9,8 @@ type Transform = euclid::default::Transform3D<f32>;
 type Vector = euclid::default::Vector3D<f32>;
 
 fn transform(from: &Components, mat: &Transform) -> Components {
-    let result = mat.transform_vector3d(Vector::new(from[0], from[1], from[2]));
-    [result.x, result.y, result.z]
+    let result = mat.transform_vector3d(Vector::new(from.0, from.1, from.2));
+    Components(result.x, result.y, result.z)
 }
 
 impl Color {
@@ -24,29 +24,30 @@ impl Color {
         // Handle conversions that can be done directly.
         match (self.color_space, color_space) {
             (C::Srgb, C::Hsl) => {
-                let [hue, saturation, lightness] = util::rgb_to_hsl(&self.components);
+                let Components(hue, saturation, lightness) = util::rgb_to_hsl(&self.components);
                 return Self::new(color_space, hue, saturation, lightness, self.alpha);
             }
             (C::Hsl, C::Srgb) => {
-                let [red, green, blue] = util::hsl_to_rgb(&self.components);
+                let Components(red, green, blue) = util::hsl_to_rgb(&self.components);
                 return Self::new(color_space, red, green, blue, self.alpha);
             }
 
             (C::Srgb, C::Hwb) => {
-                let [hue, whiteness, blackness] = util::rgb_to_hwb(&self.components);
+                let Components(hue, whiteness, blackness) = util::rgb_to_hwb(&self.components);
                 return Self::new(color_space, hue, whiteness, blackness, self.alpha);
             }
             (C::Hwb, C::Srgb) => {
-                let [red, green, blue] = util::hwb_to_rgb(&self.components);
+                let Components(red, green, blue) = util::hwb_to_rgb(&self.components);
                 return Self::new(color_space, red, green, blue, self.alpha);
             }
 
             (C::Lch, C::Lab) | (C::Oklch, C::Oklab) => {
-                let [lightness, chroma, hue] = util::polar_to_orthogonal(&self.components);
+                let Components(lightness, chroma, hue) =
+                    util::polar_to_orthogonal(&self.components);
                 return Self::new(color_space, lightness, chroma, hue, self.alpha);
             }
             (C::Lab, C::Lch) | (C::Oklab, C::Oklch) => {
-                let [lightness, a, b] = util::orthogonal_to_polar(&self.components);
+                let Components(lightness, a, b) = util::orthogonal_to_polar(&self.components);
                 return Self::new(color_space, lightness, a, b, self.alpha);
             }
 
@@ -84,9 +85,9 @@ impl Color {
             C::ProphotoRgb => todo!(),
             C::Rec2020 => todo!(),
             C::XyzD50 => XyzD50::new(
-                self.components[0],
-                self.components[1],
-                self.components[2],
+                self.components.0,
+                self.components.1,
+                self.components.2,
                 self.flags,
             ),
             C::XyzD65 => self.as_model::<XyzD65>().to_xyz_d50(),
@@ -143,19 +144,19 @@ impl Srgb {
     }
 
     fn to_hsl(&self) -> Hsl {
-        let [hue, saturation, lightness] = util::rgb_to_hsl(self.components());
+        let Components(hue, saturation, lightness) = util::rgb_to_hsl(self.components());
         Hsl::new(hue, saturation, lightness, self.flags)
     }
 
     fn to_hwb(&self) -> Hwb {
-        let [hue, whiteness, blackness] = util::rgb_to_hwb(self.components());
+        let Components(hue, whiteness, blackness) = util::rgb_to_hwb(self.components());
         Hwb::new(hue, whiteness, blackness, self.flags)
     }
 }
 
 impl SrgbLinear {
     pub fn to_gamma_encoded(&self) -> Srgb {
-        let [red, green, blue] = self.components().map(|c| {
+        let Components(red, green, blue) = self.components().map(|c| {
             let abs = c.abs();
 
             if abs > 0.0031308 {
@@ -177,7 +178,7 @@ impl SrgbLinear {
             0.0,                 0.0,                 0.0,                 1.0,
         );
 
-        let [x, y, z] = transform(self.components(), &TO_XYZ);
+        let Components(x, y, z) = transform(self.components(), &TO_XYZ);
 
         XyzD65::new(x, y, z, self.flags)
     }
@@ -185,14 +186,14 @@ impl SrgbLinear {
 
 impl Hsl {
     pub fn to_srgb(&self) -> Srgb {
-        let [red, green, blue] = util::hsl_to_rgb(self.components());
+        let Components(red, green, blue) = util::hsl_to_rgb(self.components());
         Srgb::new(red, green, blue, self.flags)
     }
 }
 
 impl Hwb {
     pub fn to_srgb(&self) -> Srgb {
-        let [red, green, blue] = util::hwb_to_rgb(self.components());
+        let Components(red, green, blue) = util::hwb_to_rgb(self.components());
         Srgb::new(red, green, blue, self.flags)
     }
 }
@@ -228,23 +229,22 @@ impl Lab {
         };
 
         XyzD50::new(
-            x * D50::WHITE_POINT[0],
-            y * D50::WHITE_POINT[1],
-            z * D50::WHITE_POINT[2],
+            x * D50::WHITE_POINT.0,
+            y * D50::WHITE_POINT.1,
+            z * D50::WHITE_POINT.2,
             self.flags,
         )
     }
 
     pub fn to_lch(&self) -> Lch {
-        let [lightness, chroma, hue] = util::orthogonal_to_polar(self.components());
+        let Components(lightness, chroma, hue) = util::orthogonal_to_polar(self.components());
         Lch::new(lightness, chroma, hue, self.flags)
     }
 }
 
 impl Lch {
     pub fn to_lab(&self) -> Lab {
-        let [lightness, a, b] = util::polar_to_orthogonal(self.components());
-
+        let Components(lightness, a, b) = util::polar_to_orthogonal(self.components());
         Lab::new(lightness, a, b, self.flags)
     }
 }
@@ -259,7 +259,7 @@ impl XyzD50 {
              0.0,                   0.0,                   0.0,                  1.0,
         );
 
-        let [x, y, z] = transform(self.components(), &MAT);
+        let Components(x, y, z) = transform(self.components(), &MAT);
 
         XyzD65::new(x, y, z, self.flags)
     }
@@ -269,9 +269,9 @@ impl XyzD50 {
         const EPSILON: f32 = 216.0 / 24389.0;
 
         let adapted = [
-            self.x / D50::WHITE_POINT[0],
-            self.y / D50::WHITE_POINT[1],
-            self.z / D50::WHITE_POINT[2],
+            self.x / D50::WHITE_POINT.0,
+            self.y / D50::WHITE_POINT.1,
+            self.z / D50::WHITE_POINT.2,
         ];
 
         // 4. Convert D50-adapted XYZ to Lab.
@@ -301,7 +301,7 @@ impl XyzD65 {
              0.0,                 0.0,                 0.0,                 1.0,
         );
 
-        let [red, green, blue] = transform(self.components(), &FROM_XYZ);
+        let Components(red, green, blue) = transform(self.components(), &FROM_XYZ);
 
         SrgbLinear::new(red, green, blue, self.flags)
     }
@@ -315,7 +315,7 @@ impl XyzD65 {
              0.0,                   0.0,                   0.0,                  1.0,
         );
 
-        let [x, y, z] = transform(self.components(), &MAT);
+        let Components(x, y, z) = transform(self.components(), &MAT);
 
         XyzD50::new(x, y, z, self.flags)
     }
@@ -355,7 +355,7 @@ mod util {
     /// Convert from RGB notation to HSL notation.
     /// <https://drafts.csswg.org/css-color-4/#rgb-to-hsl>
     pub fn rgb_to_hsl(from: &Components) -> Components {
-        let [red, green, blue] = *from;
+        let Components(red, green, blue) = *from;
 
         let (hue, min, max) = rgb_to_hue_min_max(red, green, blue);
 
@@ -372,7 +372,7 @@ mod util {
             0.0
         };
 
-        [hue, saturation, lightness]
+        Components(hue, saturation, lightness)
     }
 
     /// Convert from HSL notation to RGB notation.
@@ -392,7 +392,7 @@ mod util {
             }
         }
 
-        let [hue, saturation, lightness] = *from;
+        let Components(hue, saturation, lightness) = *from;
 
         let t2 = if lightness <= 0.5 {
             lightness * (saturation + 1.0)
@@ -401,63 +401,63 @@ mod util {
         };
         let t1 = lightness * 2.0 - t2;
 
-        [
+        Components(
             hue_to_rgb(t1, t2, hue + 120.0),
             hue_to_rgb(t1, t2, hue),
             hue_to_rgb(t1, t2, hue - 120.0),
-        ]
+        )
     }
 
     /// Convert from RGB notation to HWB notation.
     /// https://drafts.csswg.org/css-color-4/#rgb-to-hwb
     pub fn rgb_to_hwb(from: &Components) -> Components {
-        let [red, green, blue] = *from;
+        let Components(red, green, blue) = *from;
 
         let (hue, min, max) = rgb_to_hue_min_max(red, green, blue);
 
         let whiteness = min;
         let blackness = 1.0 - max;
 
-        [hue, whiteness, blackness]
+        Components(hue, whiteness, blackness)
     }
 
     /// Convert from HWB notation to RGB notation.
     /// https://drafts.csswg.org/css-color-4/#hwb-to-rgb
     pub fn hwb_to_rgb(from: &Components) -> Components {
-        let [hue, whiteness, blackness] = *from;
+        let Components(hue, whiteness, blackness) = *from;
 
         if whiteness + blackness > 1.0 {
             let gray = whiteness / (whiteness + blackness);
-            return [gray, gray, gray];
+            return Components(gray, gray, gray);
         }
 
         let x = 1.0 - whiteness - blackness;
-        hsl_to_rgb(&[hue, 1.0, 0.5]).map(|v| v * x + whiteness)
+        hsl_to_rgb(&Components(hue, 1.0, 0.5)).map(|v| v * x + whiteness)
     }
 
     /// Convert from a cylindrical polar coordinate to the rectangular orthogonal
     /// form. This is used to convert (ok)lch to (ok)lab.
     /// <https://drafts.csswg.org/css-color-4/#color-conversion-code>
     pub fn polar_to_orthogonal(from: &Components) -> Components {
-        let [lightness, chroma, hue] = *from;
+        let Components(lightness, chroma, hue) = *from;
 
         let hue = hue.to_radians();
         let a = chroma * hue.cos();
         let b = chroma * hue.sin();
 
-        [lightness, a, b]
+        Components(lightness, a, b)
     }
 
     /// Convert from the rectangular orthogonal form to a cylindrical polar
     /// coordinate. This is used to convert (ok)lab to (ok)lch.
     /// <https://drafts.csswg.org/css-color-4/#color-conversion-code>
     pub fn orthogonal_to_polar(from: &Components) -> Components {
-        let [lightness, a, b] = *from;
+        let Components(lightness, a, b) = *from;
 
         let hue = b.atan2(a).to_degrees().rem_euclid(360.0);
         let chroma = (a * a + b * b).sqrt();
 
-        [lightness, chroma, hue]
+        Components(lightness, chroma, hue)
     }
 }
 
@@ -509,22 +509,22 @@ mod tests {
 
             assert_eq!(result.color_space, to.color_space);
             assert!(
-                almost_equal!(result.components[0], to.components[0]),
+                almost_equal!(result.components.0, to.components.0),
                 "c0 {} is not equal to {}",
-                result.components[0],
-                to.components[0]
+                result.components.0,
+                to.components.0
             );
             assert!(
-                almost_equal!(result.components[1], to.components[1]),
+                almost_equal!(result.components.1, to.components.1),
                 "c1 {} is not equal to {}",
-                result.components[1],
-                to.components[1]
+                result.components.1,
+                to.components.1
             );
             assert!(
-                almost_equal!(result.components[2], to.components[2]),
+                almost_equal!(result.components.2, to.components.2),
                 "c2 {} is not equal to {}",
-                result.components[2],
-                to.components[2]
+                result.components.2,
+                to.components.2
             );
             assert!(
                 almost_equal!(result.alpha, to.alpha),

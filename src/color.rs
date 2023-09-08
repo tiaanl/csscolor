@@ -50,7 +50,16 @@ bitflags! {
     }
 }
 
-pub type Components = [f32; 3];
+// pub type Components = [f32; 3];
+#[derive(Clone, Debug, PartialEq)]
+#[repr(C)]
+pub struct Components(pub f32, pub f32, pub f32);
+
+impl Components {
+    pub fn map(&self, f: impl Fn(f32) -> f32) -> Self {
+        Self(f(self.0), f(self.1), f(self.2))
+    }
+}
 
 #[derive(Clone, PartialEq, Debug)]
 #[repr(C)]
@@ -128,7 +137,7 @@ impl Color {
         let alpha = component_details!(alpha, ColorFlags::ALPHA_IS_NONE);
 
         Self {
-            components: [c0, c1, c2],
+            components: Components(c0, c1, c2),
             flags,
             color_space,
             alpha,

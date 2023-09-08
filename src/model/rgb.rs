@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{Color, ColorFlags, ColorSpace};
+use crate::{Color, ColorFlags, ColorSpace, Components};
 
 use super::ColorSpaceModel;
 
@@ -63,7 +63,7 @@ impl ColorSpaceModel for Srgb {
 
     fn into_color(self, alpha: f32) -> Color {
         Color {
-            components: [self.red, self.green, self.blue],
+            components: Components(self.red, self.green, self.blue),
             flags: self.flags,
             color_space: Self::COLOR_SPACE,
             alpha,
@@ -78,7 +78,7 @@ impl ColorSpaceModel for SrgbLinear {
 
     fn into_color(self, alpha: f32) -> Color {
         Color {
-            components: [self.red, self.green, self.blue],
+            components: Components(self.red, self.green, self.blue),
             flags: self.flags,
             color_space: Self::COLOR_SPACE,
             alpha,

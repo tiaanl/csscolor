@@ -9,12 +9,12 @@ pub trait WhitePoint {
 
 pub struct D50;
 impl WhitePoint for D50 {
-    const WHITE_POINT: Components = [0.9642956764295677, 1.0, 0.8251046025104602];
+    const WHITE_POINT: Components = Components(0.9642956764295677, 1.0, 0.8251046025104602);
 }
 
 pub struct D65;
 impl WhitePoint for D65 {
-    const WHITE_POINT: Components = [0.9504559270516716, 1.0, 1.0890577507598784];
+    const WHITE_POINT: Components = Components(0.9504559270516716, 1.0, 1.0890577507598784);
 }
 
 #[repr(C)]
@@ -47,7 +47,7 @@ impl ColorSpaceModel for XyzD50 {
 
     fn into_color(self, alpha: f32) -> Color {
         Color {
-            components: [self.x, self.y, self.z],
+            components: Components(self.x, self.y, self.z),
             flags: self.flags,
             color_space: Self::COLOR_SPACE,
             alpha,
@@ -62,7 +62,7 @@ impl ColorSpaceModel for XyzD65 {
 
     fn into_color(self, alpha: f32) -> Color {
         Color {
-            components: [self.x, self.y, self.z],
+            components: Components(self.x, self.y, self.z),
             flags: self.flags,
             color_space: Self::COLOR_SPACE,
             alpha,
